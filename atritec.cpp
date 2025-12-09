@@ -30,8 +30,9 @@ int atritec(char* filename)
     }
 
     /* Parse data. */
-    // Use a contigous data structure, i.e. an array, to ensure cache locality.
+    // Note: There is no mention of endianess in the given data schema. Hence, it is assumed that the endianss of the platform that produces the data is the same as the endianess of the platform that will run this code.
     int max_n_data = 64; // Should be tuned to expected `max_n_data` of application. Then one can skip the memory reallocations when one "runs out of memory".
+    // Use a contigous data structure, i.e. an array, to ensure cache locality.
     AtrisenseRecord* data = (AtrisenseRecord*)malloc(sizeof(AtrisenseRecord)*max_n_data); // Assume that using stdlib malloc is sufficient for our memory handling
     if (data == 0)
     {
@@ -53,7 +54,8 @@ int atritec(char* filename)
         {
             ungetc(c, fp);
         }
-        // Read field by field to ensure portability. A struct can contain padding. On some platforms direct writing of a struct to disk can include padding between fields. Although, I have never encountered this. Still, do it for robustness.
+        // It is assumed that the struct has been written field by field for space efficiency and portability.
+        // For example, according to the source code the size of AtrisenseRecord is 18 bytes, assuming sizeof(float) = 4, but after compilation it is 20 due to 2 bytes of padding at the end to satisfy data structure alignment. Furthermore, if on some exotic platform sizeof(float) = 8, then there would be 10 bytes of padding.
         n_read = fread(&data[n_data].scan_number, sizeof(data[n_data].scan_number),1, fp);
         if (n_read == 0)
         {
