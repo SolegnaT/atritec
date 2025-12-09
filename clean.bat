@@ -1,0 +1,9 @@
+del atritec_test.exe
+del atritec_main.exe
+del *.ilk
+del *.obj
+del *.pdb
+del output.bin
+del output.mcap
+del test1.bin
+del test_input.bin
