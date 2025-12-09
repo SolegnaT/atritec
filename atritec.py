@@ -35,17 +35,18 @@ def main(): # convert my binary format to mcap
             ("y", np.float32),
             ("z", np.float32),
             ("intensity", np.uint16)
-        ]
+        ],
+        align = False # Do not add the padding that a C compiler adds. Consequently, we can directly use np.fromfile to read the data struct by struct instead of field by field.
     )
     channel = PointCloudChannel(topic="point_cloud")
     with foxglove.open_mcap("output.mcap", allow_overwrite=True):
-        data = np.fromfile("output.bin", dtype=struct_point) # not portable
+        data = np.fromfile("output.bin", dtype=struct_point)
         pc = PointCloud(
                 timestamp=Timestamp(sec=0, nsec=0),
                 frame_id="base",
                 point_stride=struct_point.itemsize,
                 fields=fields,
-                data=data.tobytes(),  # Convert to bytes for PointCloud
+                data=data.tobytes(),
         )
         channel.log(
                 pc,

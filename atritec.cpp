@@ -1,9 +1,10 @@
+// Assume that the C standard library is available on the platform.
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
-
+#include <ctime>
 typedef struct {
     uint32_t scan_number;
     float x_angle_deg;
@@ -20,179 +21,143 @@ typedef struct {
     uint16_t intensity;
 } Point;
 
+#define BUFFER_SIZE 256 // Should be tuned for performance via profiling.
+
+// Using globals to avoid using malloc/free, this simplifies future refactoring.
+AtrisenseRecord input_buffer[BUFFER_SIZE]; // Use a contigous data structure, i.e. an array, to ensure cache locality.
+Point output_buffer[BUFFER_SIZE]; // Note: one could perform the conversion in-place, hence halfing the memory usage, but it should be more robust to use separate memory for the buffers since one may decide to change the output data struct and then forget to change also the underlying memory.
+
 int atritec(char* filename)
 {
-    FILE* fp = fopen(filename, "rb");
-    if (fp == 0)
+    clock_t t1 = clock();
+    // It is assumed that in general the file size can be huge, multiple terabytes. On some platforms and operating system that support memory swapping loading the data fits in the process' virtual memory space. Since, I don't know what platform and OS we are targeting I decide to use a buffer to write from an input file to an output file in batches.
+    FILE* fp_in = fopen(filename, "rb");
+    if (fp_in == 0)
     {
-        printf("Failed to open file %s.\n", filename);
+        printf("Failed to open file `%s`.\n", filename);
+        return 1;
+    }
+    FILE* fp_out = fopen("output.bin","wb");
+    if (fp_out == 0)
+    {
+        printf("Failed to open file `output.bin`.\n");
+        fclose(fp_in);
         return 1;
     }
 
-    /* Parse data. */
-    // Note: There is no mention of endianess in the given data schema. Hence, it is assumed that the endianss of the platform that produces the data is the same as the endianess of the platform that will run this code.
-    int max_n_data = 64; // Should be tuned to expected `max_n_data` of application. Then one can skip the memory reallocations when one "runs out of memory".
-    // Use a contigous data structure, i.e. an array, to ensure cache locality.
-    AtrisenseRecord* data = (AtrisenseRecord*)malloc(sizeof(AtrisenseRecord)*max_n_data); // Assume that using stdlib malloc is sufficient for our memory handling
-    if (data == 0)
-    {
-        printf("Failed to allocate memory for input data\n");
-        fclose(fp);
-        return 1;
-    }
-    int n_data = 0;
-    int parsing_succeeded = 1;
     size_t n_read;
     for (;;)
     {
-        int c = fgetc(fp);
-        if ( c == EOF)
+        if (feof(fp_in))
         {
             break;
         }
-        else
+        /* Populate input buffer */
+        int n_data = 0;
+        for (int i = 0; i < BUFFER_SIZE; i++)
         {
-            ungetc(c, fp);
-        }
-        // It is assumed that the struct has been written field by field for space efficiency and portability.
-        // For example, according to the source code the size of AtrisenseRecord is 18 bytes, assuming sizeof(float) = 4, but after compilation it is 20 due to 2 bytes of padding at the end to satisfy data structure alignment. Furthermore, if on some exotic platform sizeof(float) = 8, then there would be 10 bytes of padding.
-        n_read = fread(&data[n_data].scan_number, sizeof(data[n_data].scan_number),1, fp);
-        if (n_read == 0)
-        {
-            printf("Failed to read field 'scan_number' of datum %d\n", n_data);
-            parsing_succeeded = 0;
-            break;
-        }
-        n_read = fread(&data[n_data].x_angle_deg, sizeof(data[n_data].x_angle_deg),1, fp);
-        if (n_read == 0)
-        {
-            printf("Failed to read field 'x_angle_deg' of datum %d\n", n_data);
-            parsing_succeeded = 0;
-            break;
-        }
-        n_read= fread(&data[n_data].y_angle_deg, sizeof(data[n_data].y_angle_deg),1, fp);
-        if (n_read == 0)
-        {
-            printf("Failed to read field 'y_angle_deg' of datum %d\n", n_data);
-            parsing_succeeded = 0;
-            break;
-        }
-        n_read= fread(&data[n_data].distance_m, sizeof(data[n_data].distance_m),1, fp);
-        if (n_read == 0)
-        {
-            printf("Failed to read field 'distance_m' of datum %d\n", n_data);
-            parsing_succeeded = 0;
-            break;
-        }
-        n_read= fread(&data[n_data].intensity, sizeof(data[n_data].intensity),1, fp);
-        if (n_read == 0)
-        {
-            printf("Failed to read field 'intensity' of datum %d\n", n_data);
-            parsing_succeeded = 0;
-            break;
-        }
-        n_data++;
-        if (n_data == max_n_data)
-        {
-            max_n_data *= 2; // Assume that exponential growth is OK for our application. Especially, a user will not provide a file that results in unbounded reading.
-            AtrisenseRecord* tmp = (AtrisenseRecord*)malloc(sizeof(AtrisenseRecord)*max_n_data);
-            if (tmp == 0)
+            // Note: There is no mention of endianess in the given data schema. Hence, it is assumed that the endianss of the platform that produces the data is the same as the endianess of the platform that will run this code.
+            // It is assumed that the struct has been written field by field for space efficiency and portability.
+            // For example, according to the source code the size of AtrisenseRecord is 18 bytes, assuming sizeof(float) = 4, but after compilation it is 20 due to 2 bytes of padding at the end to satisfy data structure alignment. Furthermore, if on some exotic platform sizeof(float) = 8, then there would be 10 bytes of padding.
+            n_read = fread(&input_buffer[n_data].scan_number, sizeof(input_buffer[n_data].scan_number),1, fp_in);
+            if (n_read == 0 && feof(fp_in))
             {
-                printf("Failed to reallocate memory\n");
-                parsing_succeeded = 0;
                 break;
             }
-            memcpy(tmp, data, sizeof(AtrisenseRecord)*n_data);
-            free(data);
-            data = tmp;
+            else if (n_read == 0)
+            {
+                printf("Failed to read field 'scan_number' of datum %d\n", n_data);
+                return 1;
+            }
+            n_read = fread(&input_buffer[n_data].x_angle_deg, sizeof(input_buffer[n_data].x_angle_deg),1, fp_in);
+            if (n_read == 0)
+            {
+                printf("Failed to read field 'x_angle_deg' of datum %d\n", n_data);
+                return 1;
+            }
+            n_read= fread(&input_buffer[n_data].y_angle_deg, sizeof(input_buffer[n_data].y_angle_deg),1, fp_in);
+            if (n_read == 0)
+            {
+                printf("Failed to read field 'y_angle_deg' of datum %d\n", n_data);
+                return 1;
+            }
+            n_read= fread(&input_buffer[n_data].distance_m, sizeof(input_buffer[n_data].distance_m),1, fp_in);
+            if (n_read == 0)
+            {
+                printf("Failed to read field 'distance_m' of datum %d\n", n_data);
+                return 1;
+            }
+            n_read= fread(&input_buffer[n_data].intensity, sizeof(input_buffer[n_data].intensity),1, fp_in);
+            if (n_read == 0)
+            {
+                printf("Failed to read field 'intensity' of datum %d\n", n_data);
+                return 1;
+            }
+            n_data++;
+        }
+
+        /* Compute 3D points from the spherical points. */
+        for (int i = 0; i < n_data; i++)
+        {
+            AtrisenseRecord d = input_buffer[i];
+            float deg2rad = 3.14159265 / 180.0; // Assume that this many digits of PI is sufficient
+            output_buffer[i].scan_number = d.scan_number;
+            output_buffer[i].x = d.distance_m*sin(deg2rad*d.y_angle_deg)*cos(deg2rad*d.x_angle_deg);
+            output_buffer[i].y = d.distance_m*cos(deg2rad*d.y_angle_deg);
+            output_buffer[i].z = d.distance_m*sin(deg2rad*d.y_angle_deg)*sin(deg2rad*d.x_angle_deg);
+            output_buffer[i].intensity = d.intensity;
+        }
+
+        /* Write converted data to disk. */
+        size_t n_written;
+        for (int i = 0; i < n_data; i++)
+        {
+            n_written = fwrite(&output_buffer[i].scan_number, sizeof(output_buffer[i].scan_number),1,fp_out);
+            if (n_written == 0)
+            {
+                printf("Failed to write field 'scan_number' of datum %d\n", i);
+                return 1;
+            }
+
+            n_written = fwrite(&output_buffer[i].x, sizeof(output_buffer[i].x),1,fp_out);
+            if (n_written == 0)
+            {
+                printf("Failed to write field 'x' of datum %d\n", i);
+                return 1;
+            }
+
+            n_written = fwrite(&output_buffer[i].y, sizeof(output_buffer[i].y),1,fp_out);
+            if (n_written == 0)
+            {
+                printf("Failed to write field 'y' of datum %d\n", i);
+                return 1;
+            }
+
+            n_written = fwrite(&output_buffer[i].z, sizeof(output_buffer[i].z),1,fp_out);
+            if (n_written == 0)
+            {
+                printf("Failed to write field 'z' of datum %d\n", i);
+                return 1;
+            }
+            n_written = fwrite(&output_buffer[i].intensity, sizeof(output_buffer[i].intensity),1,fp_out);
+            if (n_written == 0)
+            {
+                printf("Failed to write field 'intensity' of datum %d\n", i);
+                return 1;
+            }
         }
     }
-    if (fclose(fp) == EOF)
-    {
-        printf("Failed to close file\n");
-        parsing_succeeded = 0;
-    }
 
-    if (parsing_succeeded == 0)
+    if (fclose(fp_in)== EOF)
     {
-        printf("Parsing failed\n");
-        free(data);
+        printf("Failed to close file '%s'\n", filename);
         return 1;
     }
-
-    /* Compute 3D points from the spherical points. */
-    Point* points = (Point*)malloc(sizeof(Point)*n_data);
-    if (points == 0)
-    {
-        printf("Failed to allocate memory for points\n");
-        free(data);
-        return 1;
-    }
-    for (int i = 0; i < n_data; i++)
-    {
-        AtrisenseRecord d = data[i];
-        float deg2rad = 3.14159265 / 180.0; // Assume that this many digits of PI is sufficient
-        points[i].scan_number = d.scan_number;
-        points[i].x = d.distance_m*sin(deg2rad*d.y_angle_deg)*cos(deg2rad*d.x_angle_deg);
-        points[i].y = d.distance_m*cos(deg2rad*d.y_angle_deg);
-        points[i].z = d.distance_m*sin(deg2rad*d.y_angle_deg)*sin(deg2rad*d.x_angle_deg);
-
-        points[i].intensity = d.intensity;
-    }
-    free(data);
-
-    /* Write converted data to disk. */
-    fp = fopen("output.bin","wb");
-    if (fp == 0)
-    {
-        printf("Failed to open 'output.bin'\n");
-        free(points);
-        return 1;
-    }
-    size_t n_written;
-    for (int i = 0; i < n_data; i++)
-    {
-        n_written = fwrite(&points[i].scan_number, sizeof(points[i].scan_number),1,fp);
-        if (n_written == 0)
-        {
-            printf("Failed to write field 'scan_number' of datum %d\n", i);
-            break;
-        }
-
-        n_written = fwrite(&points[i].x, sizeof(points[i].x),1,fp);
-        if (n_written == 0)
-        {
-            printf("Failed to write field 'x' of datum %d\n", i);
-            break;
-        }
-
-        n_written = fwrite(&points[i].y, sizeof(points[i].y),1,fp);
-        if (n_written == 0)
-        {
-            printf("Failed to write field 'y' of datum %d\n", i);
-            break;
-        }
-
-        n_written = fwrite(&points[i].z, sizeof(points[i].z),1,fp);
-        if (n_written == 0)
-        {
-            printf("Failed to write field 'z' of datum %d\n", i);
-            break;
-        }
-        n_written = fwrite(&points[i].intensity, sizeof(points[i].intensity),1,fp);
-        if (n_written == 0)
-        {
-            printf("Failed to write field 'intensity' of datum %d\n", i);
-            break;
-        }
-    }
-    free(points);
-
-    if (fclose(fp)== EOF)
+    if (fclose(fp_out)== EOF)
     {
         printf("Failed to close file 'output.bin'\n");
         return 1;
     }
-
+    printf("time = %f\n", (clock()-t1)/(double)CLOCKS_PER_SEC);
     return 0;
 }
