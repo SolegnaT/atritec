@@ -1,6 +1,6 @@
 # Contents
 - `atrisense.bin`: given data
-- `atritec.cpp`: code for solving the following tasks
+- `atritec.cpp`: code for solving the following tasks   
   Task 1. Decode the Atrisense binary into structured records.  
   Task 2. Convert each record into Cartesian coordinates (x, y, z).  
 - `atritec_main.cpp`: entrypoint for running the code in `atritec.cpp` as a CLI tool.
