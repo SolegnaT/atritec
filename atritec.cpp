@@ -31,7 +31,7 @@ int atritec(char* filename)
 
     /* Parse data. */
     // Use a contigous data structure, i.e. an array, to ensure cache locality.
-    int max_n_data = 64; // Should be tuned to expected max_n_data of application.
+    int max_n_data = 64; // Should be tuned to expected `max_n_data` of application. Then one can skip the memory reallocations when one "runs out of memory".
     AtrisenseRecord* data = (AtrisenseRecord*)malloc(sizeof(AtrisenseRecord)*max_n_data); // Assume that using stdlib malloc is sufficient for our memory handling
     if (data == 0)
     {
@@ -42,7 +42,6 @@ int atritec(char* filename)
     int n_data = 0;
     int parsing_succeeded = 1;
     size_t n_read;
-    size_t sz;
     for (;;)
     {
         int c = fgetc(fp);
@@ -93,7 +92,7 @@ int atritec(char* filename)
         n_data++;
         if (n_data == max_n_data)
         {
-            max_n_data *= 2; // Assume that exponential growth is OK for our application
+            max_n_data *= 2; // Assume that exponential growth is OK for our application. Especially, a user will not provide a file that results in unbounded reading.
             AtrisenseRecord* tmp = (AtrisenseRecord*)malloc(sizeof(AtrisenseRecord)*max_n_data);
             if (tmp == 0)
             {
@@ -101,8 +100,7 @@ int atritec(char* filename)
                 parsing_succeeded = 0;
                 break;
             }
-            size_t sz = sizeof(AtrisenseRecord)*n_data;
-            memcpy(tmp, data, sz);
+            memcpy(tmp, data, sizeof(AtrisenseRecord)*n_data);
             free(data);
             data = tmp;
         }
@@ -133,10 +131,6 @@ int atritec(char* filename)
         AtrisenseRecord d = data[i];
         float deg2rad = 3.14159265 / 180.0; // Assume that this many digits of PI is sufficient
         points[i].scan_number = d.scan_number;
-        //points[i].x = d.distance_m*cos(deg2rad*d.y_angle_deg)*cos(deg2rad*d.x_angle_deg);
-        //points[i].y = d.distance_m*sin(deg2rad*d.y_angle_deg);
-        //points[i].z = d.distance_m*cos(deg2rad*d.y_angle_deg)*sin(deg2rad*d.x_angle_deg);
-
         points[i].x = d.distance_m*sin(deg2rad*d.y_angle_deg)*cos(deg2rad*d.x_angle_deg);
         points[i].y = d.distance_m*cos(deg2rad*d.y_angle_deg);
         points[i].z = d.distance_m*sin(deg2rad*d.y_angle_deg)*sin(deg2rad*d.x_angle_deg);
@@ -154,14 +148,6 @@ int atritec(char* filename)
         return 1;
     }
     size_t n_written;
-//    n_written = fwrite(&n_data, sizeof(n_data), 1, fp); // Write the number of data for simplicity
-//    if (n_written == 0)
-//    {
-//        printf("Failed to write 'n_data'.\n");
-//        fclose(fp);
-//        free(points);
-//        return 1;
-//    }
     for (int i = 0; i < n_data; i++)
     {
         n_written = fwrite(&points[i].scan_number, sizeof(points[i].scan_number),1,fp);
