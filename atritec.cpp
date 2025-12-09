@@ -59,13 +59,18 @@ int atritec(char* filename)
             // Note: There is no mention of endianess in the given data schema. Hence, it is assumed that the endianss of the platform that produces the data is the same as the endianess of the platform that will run this code.
             // It is assumed that the struct has been written field by field for space efficiency and portability.
             // For example, according to the source code the size of AtrisenseRecord is 18 bytes, assuming sizeof(float) = 4, but after compilation it is 20 due to 2 bytes of padding at the end to satisfy data structure alignment. Furthermore, if on some exotic platform sizeof(float) = 8, then there would be 10 bytes of padding.
+            // Both the reading and writing could be significantly simplified if either one uses compiler commands to
+            // pack the structs or one had used a uint32 for the field `intensity`. The former is implementation dependent
+            // and the latter I lack control over. Hence, I choose to read and write field by field. One could have
+            // replaced all read calls by just `fread(input_buffer, sizeof(AtrisenseRecord), BUFFER_SIZE, fp_in)`
+            // if there was no padding.
             n_read = fread(&input_buffer[n_data].scan_number, sizeof(input_buffer[n_data].scan_number),1, fp_in);
-            if (n_read == 0 && feof(fp_in))
+            if (n_read == 0)
             {
-                break;
-            }
-            else if (n_read == 0)
-            {
+                if (feof(fp_in))
+                {
+                    break;
+                }
                 printf("Failed to read field 'scan_number' of datum %d\n", n_data);
                 return 1;
             }
