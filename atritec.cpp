@@ -46,10 +46,6 @@ int atritec(char* filename)
     size_t n_read;
     for (;;)
     {
-        if (feof(fp_in))
-        {
-            break;
-        }
         /* Populate input buffer */
         int n_data = 0;
         for (int i = 0; i < BUFFER_SIZE; i++)
