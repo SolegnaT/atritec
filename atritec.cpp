@@ -4,7 +4,6 @@
 #include <cstdlib>
 #include <cmath>
 #include <cstring>
-#include <ctime>
 typedef struct {
     uint32_t scan_number;
     float x_angle_deg;
@@ -29,7 +28,6 @@ Point output_buffer[BUFFER_SIZE]; // Note: one could perform the conversion in-p
 
 int atritec(char* filename)
 {
-    clock_t t1 = clock();
     // It is assumed that in general the file size can be huge, multiple terabytes. On some platforms and operating system that support memory swapping loading the data fits in the process' virtual memory space. Since, I don't know what platform and OS we are targeting I decide to use a buffer to write from an input file to an output file in batches.
     FILE* fp_in = fopen(filename, "rb");
     if (fp_in == 0)
@@ -163,6 +161,5 @@ int atritec(char* filename)
         printf("Failed to close file 'output.bin'\n");
         return 1;
     }
-    printf("time = %f\n", (clock()-t1)/(double)CLOCKS_PER_SEC);
     return 0;
 }
