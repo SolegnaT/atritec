@@ -44,7 +44,8 @@ int atritec(char* filename)
     }
 
     size_t n_read;
-    for (;;)
+    int done = 0;
+    for (;done == 0;)
     {
         /* Populate input buffer */
         int n_data = 0;
@@ -63,6 +64,7 @@ int atritec(char* filename)
             {
                 if (feof(fp_in))
                 {
+                    done = 1;
                     break;
                 }
                 printf("Failed to read field 'scan_number' of datum %d\n", n_data);
