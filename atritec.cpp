@@ -29,7 +29,6 @@ int point_sz = 18;
 
 // Using globals to avoid using malloc/free, this simplifies future refactoring.
 void* input_buffer[sizeof(AtrisenseRecord)*BUFFER_SIZE]; // Use a contigous data structure, i.e. an array, to ensure cache locality.
-AtrisenseRecord records[BUFFER_SIZE];
 Point output_buffer[BUFFER_SIZE]; // Note: one could perform the conversion in-place, hence halfing the memory usage, but it should be more robust to use separate memory for the buffers since one may decide to change the output data struct and then forget to change also the underlying memory.
 
 int atritec(char* filename)
@@ -75,21 +74,16 @@ int atritec(char* filename)
                 return 1;
             }
         }
-        for (int i = 0; i < BUFFER_SIZE; i++)
-        {
-            memcpy(&records[i], input_buffer + atrisense_record_sz*i, atrisense_record_sz);
-        }
-
         /* Compute 3D points from the spherical points. */
         for (int i = 0; i < n_data; i++)
         {
-            AtrisenseRecord d = records[i];
+            AtrisenseRecord* d = (AtrisenseRecord*)&input_buffer[atrisense_record_sz*i];
             float deg2rad = 3.14159265 / 180.0; // Assume that this many digits of PI is sufficient
-            output_buffer[i].scan_number = d.scan_number;
-            output_buffer[i].x = d.distance_m*cos(deg2rad*d.y_angle_deg)*cos(deg2rad*d.x_angle_deg);
-            output_buffer[i].y = d.distance_m*cos(deg2rad*d.y_angle_deg)*sin(deg2rad*d.x_angle_deg);
-            output_buffer[i].z = d.distance_m*sin(deg2rad*d.y_angle_deg);
-            output_buffer[i].intensity = d.intensity;
+            output_buffer[i].scan_number = d->scan_number;
+            output_buffer[i].x = d->distance_m*cos(deg2rad*d->y_angle_deg)*cos(deg2rad*d->x_angle_deg);
+            output_buffer[i].y = d->distance_m*cos(deg2rad*d->y_angle_deg)*sin(deg2rad*d->x_angle_deg);
+            output_buffer[i].z = d->distance_m*sin(deg2rad*d->y_angle_deg);
+            output_buffer[i].intensity = d->intensity;
         }
 
         /* Write converted data to disk. */
