@@ -103,9 +103,9 @@ int atritec(char* filename)
             AtrisenseRecord d = input_buffer[i];
             float deg2rad = 3.14159265 / 180.0; // Assume that this many digits of PI is sufficient
             output_buffer[i].scan_number = d.scan_number;
-            output_buffer[i].x = d.distance_m*sin(deg2rad*d.y_angle_deg)*cos(deg2rad*d.x_angle_deg);
-            output_buffer[i].y = d.distance_m*cos(deg2rad*d.y_angle_deg);
-            output_buffer[i].z = d.distance_m*sin(deg2rad*d.y_angle_deg)*sin(deg2rad*d.x_angle_deg);
+            output_buffer[i].x = d.distance_m*cos(deg2rad*d.y_angle_deg)*cos(deg2rad*d.x_angle_deg);
+            output_buffer[i].y = d.distance_m*cos(deg2rad*d.y_angle_deg)*sin(deg2rad*d.x_angle_deg);
+            output_buffer[i].z = d.distance_m*sin(deg2rad*d.y_angle_deg);
             output_buffer[i].intensity = d.intensity;
         }
 
