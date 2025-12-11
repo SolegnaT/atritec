@@ -14,6 +14,7 @@ typedef struct {
     uint16_t intensity;
 } AtrisenseRecord;
 int atrisense_record_sz = 18;
+#define SIZEOF_ATRISENSERECORD 18
 
 typedef struct {
     uint32_t scan_number;
@@ -26,9 +27,8 @@ typedef struct {
 int point_sz = 18;
 
 #define BUFFER_SIZE 256 // Should be tuned for performance via profiling.
-
 // Using globals to avoid using malloc/free, this simplifies future refactoring.
-void* input_buffer[sizeof(AtrisenseRecord)*BUFFER_SIZE]; // Use a contigous data structure, i.e. an array, to ensure cache locality.
+void* input_buffer[SIZEOF_ATRISENSERECORD*BUFFER_SIZE]; // Use a contigous data structure, i.e. an array, to ensure cache locality.
 Point output_buffer[BUFFER_SIZE]; // Note: one could perform the conversion in-place, hence halfing the memory usage, but it should be more robust to use separate memory for the buffers since one may decide to change the output data struct and then forget to change also the underlying memory.
 
 int atritec(char* filename)
