@@ -13,7 +13,6 @@ typedef struct {
     float distance_m;
     uint16_t intensity;
 } AtrisenseRecord;
-int atrisense_record_sz = 18;
 #define SIZEOF_ATRISENSERECORD 18
 
 typedef struct {
@@ -24,12 +23,12 @@ typedef struct {
     uint16_t intensity;
 } Point;
 
-int point_sz = 18;
+#define SIZEOF_POINT 18
 
 #define BUFFER_SIZE 256 // Should be tuned for performance via profiling.
 // Using globals to avoid using malloc/free, this simplifies future refactoring.
 void* input_buffer[SIZEOF_ATRISENSERECORD*BUFFER_SIZE]; // Use a contigous data structure, i.e. an array, to ensure cache locality.
-Point output_buffer[BUFFER_SIZE]; // Note: one could perform the conversion in-place, hence halfing the memory usage, but it should be more robust to use separate memory for the buffers since one may decide to change the output data struct and then forget to change also the underlying memory.
+void* output_buffer[SIZEOF_POINT*BUFFER_SIZE]; // Note: one could perform the conversion in-place, hence halfing the memory usage, but it should be more robust to use separate memory for the buffers since one may decide to change the output data struct and then forget to change also the underlying memory.
 
 int atritec(char* filename)
 {
@@ -61,7 +60,7 @@ int atritec(char* filename)
         // and the latter I lack control over. Hence, I choose to read and write field by field. One could have
         // replaced all read calls by just `fread(input_buffer, sizeof(AtrisenseRecord), BUFFER_SIZE, fp_in)`
         // if there was no padding.
-        int n_data = fread(input_buffer, atrisense_record_sz, BUFFER_SIZE, fp_in);
+        int n_data = fread(input_buffer, SIZEOF_ATRISENSERECORD, BUFFER_SIZE, fp_in);
         if (n_data < BUFFER_SIZE)
         {
             if (feof(fp_in))
@@ -70,31 +69,29 @@ int atritec(char* filename)
             }
             if (ferror(fp_in))
             {
-                printf("Failed to read field 'scan_number' of datum %d\n", n_data);
+                printf("Failed to read batch.\n");
                 return 1;
             }
         }
         /* Compute 3D points from the spherical points. */
         for (int i = 0; i < n_data; i++)
         {
-            AtrisenseRecord* d = (AtrisenseRecord*)&input_buffer[atrisense_record_sz*i];
+            AtrisenseRecord* d = (AtrisenseRecord*)&input_buffer[SIZEOF_ATRISENSERECORD*i];
             float deg2rad = 3.14159265 / 180.0; // Assume that this many digits of PI is sufficient
-            output_buffer[i].scan_number = d->scan_number;
-            output_buffer[i].x = d->distance_m*cos(deg2rad*d->y_angle_deg)*cos(deg2rad*d->x_angle_deg);
-            output_buffer[i].y = d->distance_m*cos(deg2rad*d->y_angle_deg)*sin(deg2rad*d->x_angle_deg);
-            output_buffer[i].z = d->distance_m*sin(deg2rad*d->y_angle_deg);
-            output_buffer[i].intensity = d->intensity;
+            Point* p = (Point*)&output_buffer[SIZEOF_POINT*i];
+            p->scan_number = d->scan_number;
+            p->x = d->distance_m*cos(deg2rad*d->y_angle_deg)*cos(deg2rad*d->x_angle_deg);
+            p->y = d->distance_m*cos(deg2rad*d->y_angle_deg)*sin(deg2rad*d->x_angle_deg);
+            p->z = d->distance_m*sin(deg2rad*d->y_angle_deg);
+            p->intensity = d->intensity;
         }
 
         /* Write converted data to disk. */
-        for (int i = 0; i < n_data; i++)
+        size_t n_written = fwrite(output_buffer, SIZEOF_POINT, n_data,fp_out);
+        if (n_written < n_data)
         {
-            size_t n_written = fwrite(&output_buffer[i], point_sz, 1, fp_out);
-            if (n_written == 0)
-            {
-                printf("Failed to write record %d.\n", i);
-                return 1;
-            }
+            printf("Failed to write batch.\n");
+            return 1;
         }
     }
 
